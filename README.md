@@ -118,7 +118,3 @@ This project helps in understanding:
 * Enhanced UI output
 
 ---
-
-##  License
-
-This project is for educational purposes.
