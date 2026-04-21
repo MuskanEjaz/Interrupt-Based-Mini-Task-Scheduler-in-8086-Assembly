@@ -1,5 +1,4 @@
-# Interrupt-Based-Mini-Task-Scheduler-in-8086-Assembly
-# Interrupt-Based Mini Task Scheduler in 8086 Assembly
+# Interrupt-Based-Mini-Task-Scheduler-in-x86
 
 ##  Overview
 
