@@ -292,7 +292,7 @@ timer_loop:
 TIMER_TICK ENDP
 
 ; ============================================================
-; TASK STUBS — Parwin's real task code
+; TASK STUBS — Parwin's task code
 ; DO NOT rename these labels — TCB entries point to them.
 ; ============================================================
 TASK0 PROC
