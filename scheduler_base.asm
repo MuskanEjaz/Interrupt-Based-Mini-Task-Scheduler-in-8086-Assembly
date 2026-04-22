@@ -7,7 +7,16 @@
 ; ============================================================
 
 INCLUDE Irvine32.inc
-
+; Color constants
+black        = 0
+blue         = 1
+green        = 2
+cyan         = 3
+red          = 4
+magenta      = 5
+brown        = 6
+lightGray    = 7
+white        = 15
 ; ============================================================
 ; CONSTANTS — change values here only, nowhere else
 ; ============================================================
@@ -65,9 +74,26 @@ RUNNING     EQU 2       ; task is currently executing
     CURRENT_TASK    DWORD 0     ; index of currently running task (0-3)
     TASK_COUNT      DWORD 0     ; how many tasks are initialized
 
+ 
     ; ----------------------------------------------------------
-    ; DISPLAY STRINGS — Maryam fills these in
+    ; DISPLAY STRINGS — Maryam's display messages
     ; ----------------------------------------------------------
+    msg_title   BYTE "-----------------------------", 0dh, 0ah
+                BYTE "  TASK SCHEDULER - STATUS", 0dh, 0ah
+                BYTE "-----------------------------", 0dh, 0ah, 0
+    msg_task0   BYTE "  Task 0: ", 0
+    msg_task1   BYTE "  Task 1: ", 0
+    msg_task2   BYTE "  Task 2: ", 0
+    msg_task3   BYTE "  Task 3: ", 0
+    msg_running BYTE "RUNNING", 0
+    msg_ready   BYTE "READY  ", 0
+    msg_inactive BYTE "INACTIVE", 0
+    msg_counter BYTE "   [ctr: ", 0
+    msg_char    BYTE "   [char: ", 0
+    msg_result  BYTE "   [res: ", 0
+    msg_close   BYTE "]", 0
+    msg_footer  BYTE "-----------------------------", 0dh, 0ah, 0
+    msg_letter  BYTE "   [let: ", 0
     msg_init    BYTE "Scheduler initialized. Tasks ready.", 0dh, 0ah, 0
     msg_start   BYTE "Starting scheduler...", 0dh, 0ah, 0
     msg_done    BYTE "All tasks complete.", 0dh, 0ah, 0
@@ -103,18 +129,13 @@ main PROC
     mov     edx, OFFSET msg_start
     call    WriteString
 
-    ; === PHASE 2 HOOK: Muskan's scheduler replaces this ===
-    call  START_SCHEDULER
+    ; START THE SCHEDULER (not VERIFY_TASKS)
+    call    START_SCHEDULER
 
-    ; === PHASE 3 HOOK: Maryam's display runs inside scheduler ===
-
-    ; For now, confirm tasks were set up correctly
-    call    VERIFY_TASKS
-
+    ; This line will never execute (scheduler runs forever)
     mov     edx, OFFSET msg_done
     call    WriteString
-
-    call    WaitMsg         ; pause so window doesn't close
+    call    WaitMsg
     exit
 main ENDP
 
@@ -262,6 +283,7 @@ check_this:
     mov     ebx, DWORD PTR [TCB_ARRAY + esi + TCB_EBX]
     mov     esp, DWORD PTR [TCB_ARRAY + esi + TCB_ESP]
 
+    call    DISPLAY_STATUS    ; Show updated task status
     ; Jump to next task
     jmp     DWORD PTR [TCB_ARRAY + esi + TCB_EIP]
 
@@ -359,5 +381,235 @@ delay3:
     call    TIMER_TICK
     jmp     TASK3
 TASK3 ENDP
-
+; ============================================================
+; DISPLAY_STATUS — Maryam Nor
+; Shows real-time task status with color coding
+; Called by scheduler after each context switch
+; ============================================================
+DISPLAY_STATUS PROC
+    pushad                          ; save all registers
+    
+    ; Clear screen for fresh display
+    call    Clrscr
+    
+    ; Print title
+    mov     edx, OFFSET msg_title
+    call    WriteString
+    
+    ; === DISPLAY TASK 0 ===
+    mov     edx, OFFSET msg_task0
+    call    WriteString
+    
+    ; Check if Task 0 is current running task
+    cmp     CURRENT_TASK, 0
+    jne     task0_not_running
+    
+    ; Task 0 is RUNNING - print in GREEN
+    mov     eax, green + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_running
+    call    WriteString
+    
+    ; Reset to default color for the counter
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    jmp     task0_show_counter
+    
+task0_not_running:
+    ; Check if Task 0 is READY
+    mov     ebx, 0                  ; task index
+    mov     eax, TCB_SIZE
+    mul     ebx
+    movzx   ecx, BYTE PTR [TCB_ARRAY + eax + TCB_STATUS]
+    cmp     ecx, READY
+    jne     task0_inactive
+    
+    ; Task 0 is READY - print in WHITE
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_ready
+    call    WriteString
+    jmp     task0_show_counter
+    
+task0_inactive:
+    ; Task 0 is INACTIVE - print in GRAY
+    mov     eax, lightGray + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_inactive
+    call    WriteString
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    jmp     task0_skip_counter
+    
+task0_show_counter:
+    ; Show counter0 value
+    mov     edx, OFFSET msg_counter
+    call    WriteString
+    mov     eax, [counter0]
+    call    WriteDec
+    mov     edx, OFFSET msg_close
+    call    WriteString
+    
+task0_skip_counter:
+    call    Crlf
+    
+    ; === DISPLAY TASK 1 ===
+    mov     edx, OFFSET msg_task1
+    call    WriteString
+    
+    cmp     CURRENT_TASK, 1
+    jne     task1_not_running
+    
+    mov     eax, green + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_running
+    call    WriteString
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    jmp     task1_show_counter
+    
+task1_not_running:
+    mov     ebx, 1
+    mov     eax, TCB_SIZE
+    mul     ebx
+    movzx   ecx, BYTE PTR [TCB_ARRAY + eax + TCB_STATUS]
+    cmp     ecx, READY
+    jne     task1_inactive
+    
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_ready
+    call    WriteString
+    jmp     task1_show_counter
+    
+task1_inactive:
+    mov     eax, lightGray + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_inactive
+    call    WriteString
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    jmp     task1_skip_counter
+    
+task1_show_counter:
+    mov     edx, OFFSET msg_counter
+    call    WriteString
+    mov     eax, [counter1]
+    call    WriteDec
+    mov     edx, OFFSET msg_close
+    call    WriteString
+    
+task1_skip_counter:
+    call    Crlf
+    
+    ; === DISPLAY TASK 2 ===
+    mov     edx, OFFSET msg_task2
+    call    WriteString
+    
+    cmp     CURRENT_TASK, 2
+    jne     task2_not_running
+    
+    mov     eax, green + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_running
+    call    WriteString
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    jmp     task2_show_result
+    
+task2_not_running:
+    mov     ebx, 2
+    mov     eax, TCB_SIZE
+    mul     ebx
+    movzx   ecx, BYTE PTR [TCB_ARRAY + eax + TCB_STATUS]
+    cmp     ecx, READY
+    jne     task2_inactive
+    
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_ready
+    call    WriteString
+    jmp     task2_show_result
+    
+task2_inactive:
+    mov     eax, lightGray + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_inactive
+    call    WriteString
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    jmp     task2_skip_result
+    
+task2_show_result:
+    mov     edx, OFFSET msg_result
+    call    WriteString
+    mov     eax, [result2]
+    call    WriteDec
+    mov     edx, OFFSET msg_close
+    call    WriteString
+    
+task2_skip_result:
+    call    Crlf
+    
+    ; === DISPLAY TASK 3 ===
+    mov     edx, OFFSET msg_task3
+    call    WriteString
+    
+    cmp     CURRENT_TASK, 3
+    jne     task3_not_running
+    
+    mov     eax, green + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_running
+    call    WriteString
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    jmp     task3_show_char
+    
+task3_not_running:
+    mov     ebx, 3
+    mov     eax, TCB_SIZE
+    mul     ebx
+    movzx   ecx, BYTE PTR [TCB_ARRAY + eax + TCB_STATUS]
+    cmp     ecx, READY
+    jne     task3_inactive
+    
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_ready
+    call    WriteString
+    jmp     task3_show_char
+    
+task3_inactive:
+    mov     eax, lightGray + (black * 16)
+    call    SetTextColor
+    mov     edx, OFFSET msg_inactive
+    call    WriteString
+    mov     eax, white + (black * 16)
+    call    SetTextColor
+    jmp     task3_skip_char
+    
+task3_show_char:
+    mov     edx, OFFSET msg_letter
+    call    WriteString
+    movzx   eax, [current_char]
+    call    WriteChar
+    mov     edx, OFFSET msg_close
+    call    WriteString
+    
+task3_skip_char:
+    call    Crlf
+    
+    ; Print footer
+    mov     edx, OFFSET msg_footer
+    call    WriteString
+    
+    ; Small delay so display is visible
+    mov     ecx, 5000
+disp_delay:
+    loop    disp_delay
+    
+    popad
+    ret
+DISPLAY_STATUS ENDP
 END main
