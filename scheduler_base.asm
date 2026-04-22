@@ -72,6 +72,14 @@ RUNNING     EQU 2       ; task is currently executing
     msg_start   BYTE "Starting scheduler...", 0dh, 0ah, 0
     msg_done    BYTE "All tasks complete.", 0dh, 0ah, 0
 
+    ; ----------------------------------------------------------
+    ; TASK VARIABLES — Parwin
+    ; ----------------------------------------------------------
+    counter0     DWORD 0     ; Task 0 counter (counts by 1)
+    counter1     DWORD 0     ; Task 1 counter (counts by 2)
+    result2      DWORD 0     ; Task 2 arithmetic result
+    current_char BYTE 41h   ; Task 3 current letter (starts at 'A')
+
 ; ============================================================
 ; CODE SEGMENT
 ; ============================================================
@@ -96,7 +104,7 @@ main PROC
     call    WriteString
 
     ; === PHASE 2 HOOK: Muskan's scheduler replaces this ===
-    ; call  START_SCHEDULER
+    call  START_SCHEDULER
 
     ; === PHASE 3 HOOK: Maryam's display runs inside scheduler ===
 
@@ -185,28 +193,170 @@ verify_loop:
 VERIFY_TASKS ENDP
 
 ; ============================================================
-; TASK STUBS — Parwin replaces these with real task code.
-; Each one is an infinite loop for now so the scheduler
-; has something to switch between.
+; CONTEXT_SWITCH — Muskan Ejaz
+; Saves current task state, finds next READY task, restores & jumps
+; ============================================================
+CONTEXT_SWITCH PROC
+    pushad                          ; save all registers (8 x 4 = 32 bytes)
+
+    ; Return address is now at [esp+32]
+    mov     edi, [esp + 32]         ; EDI = saved EIP of current task
+
+    ; --- Save current task state into its TCB ---
+    mov     eax, CURRENT_TASK
+    push    eax                     ; save index
+    mov     ebx, TCB_SIZE
+    mul     ebx                     ; EAX = current_task * 20
+    mov     esi, eax                ; ESI = TCB byte offset
+
+    ; Save EIP
+    mov     DWORD PTR [TCB_ARRAY + esi + TCB_EIP], edi
+
+    ; Save ESP (real ESP = esp + 32 pushad + 4 return addr = esp+36)
+    mov     eax, esp
+    add     eax, 36
+    mov     DWORD PTR [TCB_ARRAY + esi + TCB_ESP], eax
+
+    ; Save EAX (at [esp+28] in pushad layout)
+    mov     eax, [esp + 28]
+    mov     DWORD PTR [TCB_ARRAY + esi + TCB_EAX], eax
+
+    ; Save EBX (at [esp+16] in pushad layout)
+    mov     eax, [esp + 16]
+    mov     DWORD PTR [TCB_ARRAY + esi + TCB_EBX], eax
+
+    ; Mark current task as READY
+    mov     BYTE PTR [TCB_ARRAY + esi + TCB_STATUS], READY
+
+    pop     eax                     ; restore current task index
+
+    ; --- Find next READY task ---
+find_next:
+    inc     eax
+    cmp     eax, NUM_TASKS
+    jl      check_this
+    mov     eax, 0                  ; wrap around
+check_this:
+    push    eax                     ; save candidate index
+    mov     ebx, TCB_SIZE
+    mul     ebx                     ; EAX = candidate * 20
+    movzx   ecx, BYTE PTR [TCB_ARRAY + eax + TCB_STATUS]
+    pop     eax                     ; restore candidate index
+    cmp     ecx, READY
+    jne     find_next               ; not ready, try next
+
+    ; --- Switch to next task ---
+    mov     CURRENT_TASK, eax
+
+    push    eax
+    mov     ebx, TCB_SIZE
+    mul     ebx
+    mov     esi, eax
+    pop     eax
+
+    ; Mark new task RUNNING
+    mov     BYTE PTR [TCB_ARRAY + esi + TCB_STATUS], RUNNING
+
+    ; Restore next task's registers
+    mov     eax, DWORD PTR [TCB_ARRAY + esi + TCB_EAX]
+    mov     ebx, DWORD PTR [TCB_ARRAY + esi + TCB_EBX]
+    mov     esp, DWORD PTR [TCB_ARRAY + esi + TCB_ESP]
+
+    ; Jump to next task
+    jmp     DWORD PTR [TCB_ARRAY + esi + TCB_EIP]
+
+CONTEXT_SWITCH ENDP
+
+; ============================================================
+; START_SCHEDULER — Muskan Ejaz
+; Entry point for the scheduler, begins with Task 0
+; ============================================================
+START_SCHEDULER PROC
+    mov     CURRENT_TASK, 0
+    mov     BYTE PTR [TCB_ARRAY + 0 + TCB_STATUS], RUNNING
+    jmp     DWORD PTR [TCB_ARRAY + 0 + TCB_EIP]
+START_SCHEDULER ENDP
+
+; ============================================================
+; TIMER_TICK — Muskan Ejaz
+; Software delay simulating a timer. Tasks call this periodically.
+; ============================================================
+TIMER_TICK PROC
+    push    ecx
+    mov     ecx, 100000
+timer_loop:
+    loop    timer_loop
+    pop     ecx
+    call    CONTEXT_SWITCH
+    ret
+TIMER_TICK ENDP
+
+; ============================================================
+; TASK STUBS — Parwin's real task code
 ; DO NOT rename these labels — TCB entries point to them.
 ; ============================================================
 TASK0 PROC
-    ; Stub: Parwin replaces with counter task
+    ; Counter task — increments counter0 by 1
+    mov     eax, [counter0]
+    inc     eax
+    mov     [counter0], eax
+
+    ; Delay loop — simulates work
+    mov     ecx, 50000
+delay0:
+    loop    delay0
+
+    call    TIMER_TICK
     jmp     TASK0
 TASK0 ENDP
 
 TASK1 PROC
-    ; Stub: Parwin replaces with display task
+    ; Counter task — increments counter1 by 2
+    mov     eax, [counter1]
+    add     eax, 2
+    mov     [counter1], eax
+
+    ; Delay loop
+    mov     ecx, 50000
+delay1:
+    loop    delay1
+
+    call    TIMER_TICK
     jmp     TASK1
 TASK1 ENDP
 
 TASK2 PROC
-    ; Stub: Parwin replaces with another routine
+    ; Arithmetic task — multiplies counter0 by 3, stores in result2
+    mov     eax, [counter0]
+    mov     ebx, 3
+    mul     ebx
+    mov     [result2], eax
+
+    ; Delay loop
+    mov     ecx, 50000
+delay2:
+    loop    delay2
+
+    call    TIMER_TICK
     jmp     TASK2
 TASK2 ENDP
 
 TASK3 PROC
-    ; Stub: Parwin replaces with another routine
+    ; Letter cycling task — cycles A through Z
+    movzx   eax, [current_char]
+    inc     eax
+    cmp     eax, 5Bh        ; past 'Z'?
+    jl      save_char
+    mov     eax, 41h        ; reset to 'A'
+save_char:
+    mov     [current_char], al
+
+    ; Delay loop
+    mov     ecx, 50000
+delay3:
+    loop    delay3
+
+    call    TIMER_TICK
     jmp     TASK3
 TASK3 ENDP
 
